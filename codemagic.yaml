@@ -1,0 +1,55 @@
+workflows:
+  build-ios-shell:
+    name: Build iOS Shell IPA (unsigned)
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+
+    environment:
+      xcode: latest
+      vars:
+        # 默认加载的站点地址；可在 Codemagic 项目 Variables 里设 SHELL_SITE_URL 覆盖
+        SHELL_SITE_URL: "https://float.bzbks.cc.cd"
+        HOMEBREW_NO_AUTO_UPDATE: "1"
+
+    scripts:
+      - name: Install xcodegen
+        script: brew install xcodegen
+
+      - name: Generate Xcode project
+        script: |
+          cd ios-shell
+          xcodegen generate
+
+      - name: Inject site URL
+        script: |
+          URL="${SHELL_SITE_URL%/}"
+          /usr/libexec/PlistBuddy -c "Set :FloatSiteURL ${URL}" ios-shell/FloatShell/Info.plist
+          /usr/libexec/PlistBuddy -c "Print :FloatSiteURL" ios-shell/FloatShell/Info.plist
+
+      - name: Build unsigned app
+        script: |
+          xcodebuild \
+            -project ios-shell/FloatShell.xcodeproj \
+            -scheme FloatShell \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath ios-shell/build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            ARCHS=arm64 \
+            build
+
+      - name: Package unsigned IPA
+        script: |
+          APP="ios-shell/build/Build/Products/Release-iphoneos/FloatShell.app"
+          test -d "$APP"
+          rm -rf build/ipa
+          mkdir -p build/ipa/Payload
+          cp -R "$APP" build/ipa/Payload/
+          cd build/ipa
+          zip -qry FloatShell-unsigned.ipa Payload
+          ls -lh FloatShell-unsigned.ipa
+
+    artifacts:
+      - build/ipa/FloatShell-unsigned.ipa

@@ -7,9 +7,7 @@ on:
         description: "要加载的自部署站点地址（https://…）"
         required: false
         type: string
-  push:
-    branches: [main]
-    paths: ["ios-shell/**", ".github/workflows/ios-shell.yml"]
+  # push 触发已关闭：macOS arm64 runner 长期拥堵，改用 Codemagic 构建（见根目录 codemagic.yaml）
 
 jobs:
   build:
