@@ -104,14 +104,19 @@ final class PushManager {
     private func cookieHeader(for host: String) -> String {
         let sem = DispatchSemaphore(value: 0)
         var header = ""
-        WKWebsiteDataStore.default().httpCookieStore.getAllCookies { cookies in
-            let parts = cookies.filter { cookie in
-                let d = cookie.domain.lowercased()
-                let h = host.lowercased()
-                return h == d || h.hasSuffix("." + d) || d.hasSuffix("." + h)
-            }.map { "\($0.name)=\($0.value)" }
-            header = parts.joined(separator: "; ")
-            sem.signal()
+        // WKWebsiteDataStore / WKHTTPCookieStore 必须在主线程访问；后台队列直接调用会触发
+        // WebKit 主线程断言崩溃（或回调无法派发导致信号量死锁）。这里派发到主线程执行，
+        // 后台队列等待结果；主线程空闲，completion 能正常回调，不会死锁。
+        DispatchQueue.main.async {
+            WKWebsiteDataStore.default().httpCookieStore.getAllCookies { cookies in
+                let parts = cookies.filter { cookie in
+                    let d = cookie.domain.lowercased()
+                    let h = host.lowercased()
+                    return h == d || h.hasSuffix("." + d) || d.hasSuffix("." + h)
+                }.map { "\($0.name)=\($0.value)" }
+                header = parts.joined(separator: "; ")
+                sem.signal()
+            }
         }
         sem.wait()
         return header

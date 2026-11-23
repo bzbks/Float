@@ -33,11 +33,16 @@ final class KeepAliveAudio {
     private var started = false
     private init() {}
 
+    private var configured = false
+
     func start() {
         guard !started else { return }
         let format = AVAudioFormat(standardFormatWithSampleRate: 44100, channels: 1)!
-        engine.attach(player)
-        engine.connect(player, to: engine.mainMixerNode, format: format)
+        if !configured {
+            engine.attach(player)
+            engine.connect(player, to: engine.mainMixerNode, format: format)
+            configured = true
+        }
         let frames = AVAudioFrameCount(44100 * 2)
         let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames)!
         buffer.frameLength = frames // 零填充 = 静音
