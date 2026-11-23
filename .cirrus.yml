@@ -1,0 +1,53 @@
+macos_instance:
+  image: ghcr.io/cirruslabs/macos-runner:sonoma
+
+env:
+  HOMEBREW_NO_AUTO_UPDATE: "1"
+  # 默认加载的站点地址；可在 Cirrus 仓库 Settings → Environment Variables 里设 SHELL_SITE_URL 覆盖
+  SHELL_SITE_URL: "https://float.bzbks.cc.cd"
+
+build_ipa_task:
+  name: Build iOS Shell IPA (unsigned)
+
+  select_xcode_script: |
+    XCODE_APP=$(ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -1)
+    echo "Using ${XCODE_APP}"
+    sudo xcode-select -s "${XCODE_APP}/Contents/Developer"
+    xcodebuild -version
+
+  install_xcodegen_script: brew install xcodegen
+
+  generate_project_script: |
+    cd ios-shell
+    xcodegen generate
+
+  inject_site_url_script: |
+    URL="${SHELL_SITE_URL%/}"
+    /usr/libexec/PlistBuddy -c "Set :FloatSiteURL ${URL}" ios-shell/FloatShell/Info.plist
+    /usr/libexec/PlistBuddy -c "Print :FloatSiteURL" ios-shell/FloatShell/Info.plist
+
+  build_app_script: |
+    xcodebuild \
+      -project ios-shell/FloatShell.xcodeproj \
+      -scheme FloatShell \
+      -configuration Release \
+      -sdk iphoneos \
+      -derivedDataPath ios-shell/build \
+      CODE_SIGNING_ALLOWED=NO \
+      CODE_SIGNING_REQUIRED=NO \
+      CODE_SIGN_IDENTITY="" \
+      ARCHS=arm64 \
+      build
+
+  package_ipa_script: |
+    APP="ios-shell/build/Build/Products/Release-iphoneos/FloatShell.app"
+    test -d "$APP"
+    rm -rf build/ipa
+    mkdir -p build/ipa/Payload
+    cp -R "$APP" build/ipa/Payload/
+    cd build/ipa && zip -qry FloatShell-unsigned.ipa Payload
+    ls -lh FloatShell-unsigned.ipa
+
+  artifacts:
+    - path: build/ipa/FloatShell-unsigned.ipa
+      name: float-shell-ios-unsigned
